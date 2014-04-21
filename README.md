@@ -1,4 +1,5 @@
-cs170
-=====
+# CS 170
 
-Operating Systems
+Building an operating system.
+
+Vagrant is for testing the shell in Linux.
