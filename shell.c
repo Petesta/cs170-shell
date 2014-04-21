@@ -74,7 +74,7 @@ char** splitString(char* string, const char charDelim) {
 }
 
 // execpv() can call relative to your position
-void execute(int arrayLength, char* array[]) {
+void execute(char* array[]) {
     int i = 0;
     int length;
     int status;
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
         //}
 
         exitShell(tokens[0]);
-        execute(argc, tokens);
+        execute(tokens);
         //break; // Only run the shell once if not commented out
     }
 
