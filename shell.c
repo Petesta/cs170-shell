@@ -128,15 +128,16 @@ int main(int argc, char* argv[]) {
     while (1) {
         if (isatty(STDIN_FILENO)) {
             printf("sish:> ");
-
-            fgets(inputLine, MAX_INPUT_SIZE, stdin);
-            strtok(inputLine, "\n"); // Weird way to remove newline from fgets
-
-            tokens = splitString(inputLine, ' ');
-            execute(tokens);
-        } else {
-            printf("TODO: STDIN is not a TTY, input is being redirected\n");
         }
+
+        fgets(inputLine, MAX_INPUT_SIZE, stdin);
+        strtok(inputLine, "\n"); // Weird way to remove newline from fgets
+
+        tokens = splitString(inputLine, ' ');
+        execute(tokens);
+
+        // TODO: exit if not TTY ?
+        if (!isatty(STDIN_FILENO)) { exit(1); }
     }
 
     return 0;
