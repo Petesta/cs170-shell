@@ -29,6 +29,14 @@ int len(char** array) {
     return length;
 }
 
+// void deleteAtPosition(char** array, int pos) {
+//     int c;
+//     int length = len(array);
+//     for (c=pos; c<length-1; c++) {
+//          array[c] = array[c+1];
+//     }
+// }
+
 
 // TODO: handle runs of whitespace, ex: "one     two"
 char** splitString(char* string, const char charDelim) {
@@ -77,7 +85,45 @@ char** splitString(char* string, const char charDelim) {
 }
 
 
-void handle_command(char* args[]) {
+// Check if output is being redirected; if so,
+// set our stdout to the file descriptor of the specified
+// output file
+//
+// To be run only from within forked child process
+void handle_output_redirection(char* args[], int argLen) {
+    char* outputFilename = NULL;
+    int i;
+
+    for (i=0; i<argLen; i++) {
+        if (strcmp(args[i], ">") == 0) {
+            outputFilename = args[i+1];
+            // TODO: hacky way to "slice off" output redirection arguments before
+            // passing to execvp()
+            args[i] = '\0';
+            break;
+        }
+    }
+
+    if (outputFilename != NULL) {
+        FILE* outputFile = fopen(outputFilename, "w+");
+
+        if (outputFile == NULL) {
+            printf("ERROR: failed to open output file\n");
+            exit(1);
+        }
+
+        if (dup2(fileno(outputFile), STDOUT_FILENO) < 0) {
+          printf("ERROR: in dup2()\n");
+          exit(1);
+        }
+    }
+}
+
+
+
+
+
+void handle_command(char* args[], int argLen) {
     int status;
     pid_t pid = fork();
 
@@ -86,6 +132,9 @@ void handle_command(char* args[]) {
         exit(1);
     } else if (pid == 0) {
         // Child
+
+        // TODO: handle_input_redirection(args, argLen);
+        handle_output_redirection(args, argLen);
 
         if (execvp(args[0], args) < 0) {
             printf("ERROR: execvp() failed\n");
@@ -109,52 +158,13 @@ void execute(char* args[]) {
     if (strcmp(args[0], "exit") == 0) { exit(1); }
 
     int argLen = len(args);
-    int i;
-
-
-
-    // TODO: input redirection
-
-
-
-
-    // Check if output is being redirected; if so,
-    // set our stdout to the file descriptor of the specified
-    // output file
-    char* outputFilename = NULL;
-    for (i=0; i<argLen; i++) {
-        if (strcmp(args[i], ">") == 0) {
-            // TODO: slice > and output file off args so they don't get passed to execvp
-            outputFilename = args[i+1];
-            break;
-        }
-    }
-
-    if (outputFilename != NULL) {
-        printf("debug: got output file %s\n", outputFilename);
-
-        FILE* outputFile = fopen(outputFilename, "w+");
-        if (outputFile == NULL) {
-            printf("ERROR: failed to open output file\n");
-            exit(1);
-        }
-
-        if (dup2(fileno(outputFile), STDOUT_FILENO) < 0) {
-          printf("ERROR: in dup2()\n");
-          exit(1);
-        }
-    }
-
-
 
     if (strcmp(args[argLen-1], "&") != 0) {
-        handle_command(args);
+        handle_command(args, argLen);
     } else {
         handle_bg_command();
     }
 }
-
-
 
 
 int main(int argc, char* argv[]) {
@@ -175,6 +185,7 @@ int main(int argc, char* argv[]) {
         // TODO: exit if not TTY ?
         if (!isatty(STDIN_FILENO)) { exit(1); }
     }
+
 
     return 0;
 }
