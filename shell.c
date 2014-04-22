@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#define MAX_INPUT_SIZE 1024
+
 // TODO: Input/Output Redirection
 // TODO: Background Processes
 // TODO: Whitespace Characters
@@ -27,6 +29,7 @@ int len(char** array) {
 }
 
 
+// TODO: handle runs of whitespace, ex: "one     two"
 char** splitString(char* string, const char charDelim) {
     char delim[2];
     char* tmp      = string;
@@ -47,6 +50,7 @@ char** splitString(char* string, const char charDelim) {
     }
 
     // Add space for trailing token
+    // TODO: wtf is this
     count += lastChar < (string + strlen(string) - 1);
 
     // Add space for null terminator
@@ -54,7 +58,7 @@ char** splitString(char* string, const char charDelim) {
 
     result = malloc(sizeof(char*) * count);
 
-    if (result) {
+    if (result != NULL) {
         char* token = strtok(string, delim);
         size_t idx  = 0;
 
@@ -118,15 +122,15 @@ void execute(char* args[]) {
 
 
 int main(int argc, char* argv[]) {
-    char inputLine[1024];
+    char inputLine[MAX_INPUT_SIZE];
     char** tokens;
 
     while (1) {
         if (isatty(STDIN_FILENO)) {
             printf("sish:> ");
 
-            // TODO: fgets?
-            gets(inputLine);
+            fgets(inputLine, MAX_INPUT_SIZE, stdin);
+            strtok(inputLine, "\n"); // Weird way to remove newline from fgets
 
             tokens = splitString(inputLine, ' ');
             execute(tokens);
