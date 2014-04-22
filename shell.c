@@ -122,14 +122,17 @@ int main(int argc, char* argv[]) {
     char** tokens;
 
     while (1) {
-        // TODO: don't display prompt if STDIN not a TTY (aka we're being redirected)
-        printf("sish:> ");
+        if (isatty(STDIN_FILENO)) {
+            printf("sish:> ");
 
-        // TODO: fgets?
-        gets(inputLine);
+            // TODO: fgets?
+            gets(inputLine);
 
-        tokens = splitString(inputLine, ' ');
-        execute(tokens);
+            tokens = splitString(inputLine, ' ');
+            execute(tokens);
+        } else {
+            printf("TODO: STDIN is not a TTY, input is being redirected\n");
+        }
     }
 
     return 0;
