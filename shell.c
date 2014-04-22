@@ -30,25 +30,19 @@ int len(char** array) {
     return length;
 }
 
-// TODO: string is being mutated, we don't want that to happen
+// TODO: We'll eventually want to drop any string from some specified index
 char** dropAmpersand(char** string) {
     int i = 0;
     char delim[2];
-    char** newString;
-    char** copy;
+    char** newArray;
 
     delim[0] = ' ';
     delim[1] = 0;
+    newArray = (char**)malloc(sizeof(char *) * (len(string) - 1));
 
-    while (i < len(string) - 1) {
-        //char* token = strtok(string, delim);
-        char* token = strtok(string[i], delim);
-        //char* token = strtok(string, delim);
-        //*(result + idx++) = strdup(token);
-        *(newString + i++) = strdup(token);
-    }
+    while (i < len(string) - 1) { *(newArray + i++) = strdup(string[i]); }
 
-    return newString;
+    return newArray;
 }
 
 char** splitString(char* string, const char charDelim) {
@@ -109,8 +103,6 @@ void execute(char* array[]) {
 
     length = len(array);
 
-    //printf("inside execute: %s\n", *dropAmpersand(array));
-
     if (strcmp(array[length - 1], ampString) != 0 ) { // No background process for this command
         if ((pid = fork()) < 0) { // Failed forked process
             printf("ERROR: failed to fork child process\n");
@@ -129,18 +121,14 @@ void execute(char* array[]) {
         printf("You are in the else part\n");
 
         if ((pid = fork()) == 0) { // Child process
-            //setpgid(0, 0);
-            printf("This is the child process\n");
-            char* temp[] = {"ls"};
-            //char** droppedAmp = dropAmpersand(array);
-            if (execvp(array[0], temp) < 0) {
+            char** droppedAmp = dropAmpersand(array);
+
+            if (execvp(array[0], droppedAmp) < 0) {
                 printf("execvp failed\n");
             } else {
                 printf("execvp succeeded\n");
             }
-            printf("after conditional *****\n");
         } else { // Parent process 
-            printf("This is the parent process\n");
             return;
         }
     }
