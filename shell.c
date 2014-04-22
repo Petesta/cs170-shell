@@ -11,6 +11,9 @@
 // TODO: Whitespace Characters
 // TODO: Error Handling (malformed string inputs)
 
+// TODO: dup2/dup(), pipe() and close()
+
+
 
 int len(char** array) {
     int length = 0;
@@ -78,6 +81,8 @@ void handle_command(char* args[]) {
         exit(1);
     } else if (pid == 0) {
         // Child
+
+        // TODO: do we have to do PATH command resolution here?
         if (execvp(args[0], args) < 0) {
             printf("ERROR: execvp() failed\n");
             exit(1);
@@ -108,12 +113,19 @@ void execute(char* args[]) {
 }
 
 
+
+// TODO: where to handle input/output redirection ?
+
+
 int main(int argc, char* argv[]) {
     char inputLine[1024];
     char** tokens;
 
     while (1) {
+        // TODO: don't display prompt if STDIN not a TTY (aka we're being redirected)
         printf("sish:> ");
+
+        // TODO: fgets?
         gets(inputLine);
 
         tokens = splitString(inputLine, ' ');
