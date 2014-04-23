@@ -3,10 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 const char* ampString  = "&";
 const char* emptyString = "";
 const char* exitString = "exit";
+
+#define MAX_INPUT_SIZE 1024
 
 // Basic commands working (i.e. `ls`, `pwd`)
 // Command line arguments working (i.e. `ls -l`)
@@ -90,6 +94,7 @@ char** splitString(char* string, const char charDelim) {
             token = strtok(0, delim);
         }
 
+        printf("idx = %d and count = %d\n", idx, count);
         assert(idx == count - 1);
         *(result + idx) = 0;
     }
@@ -119,7 +124,7 @@ void execute2(char* array[]) {
             while (wait(&status) != pid) // Wait for completion
                 ;
         }
-    } else { // TODO: This case handles the background process waiting to happen (i.e. &)
+    } else { // This case handles the background process waiting to happen (i.e. &)
 
         if ((pid = fork()) == 0) { // Child process
             char** droppedAmp = dropAmpersand(array);
@@ -140,7 +145,7 @@ void execute2(char* array[]) {
 // output file
 //
 // To be run only from within forked child process
-void handle_output_redirection(char* args[], int argLen) {
+void handleOutputRedirection(char* args[], int argLen) {
     char* outputFilename = NULL;
     int i;
 
@@ -169,8 +174,7 @@ void handle_output_redirection(char* args[], int argLen) {
     }
 }
 
-
-void handle_command(char* args[], int argLen) {
+void handleCommand(char* args[], int argLen) {
     int status;
     pid_t pid = fork();
 
@@ -181,40 +185,35 @@ void handle_command(char* args[], int argLen) {
         // Child
 
         // TODO: handle_input_redirection(args, argLen);
-        handle_output_redirection(args, argLen);
+        handleOutputRedirection(args, argLen);
 
         if (execvp(args[0], args) < 0) {
-            printf("ERROR: execvp() failed\n");
+            printf("i am running here\n");
+            printf("here ERROR: execvp() failed\n");
             exit(1);
         }
-    } else {
-        // Parent
+    } else { // Parent Process
         while (wait(&status) != pid) {
             ; // Wait for child to finish
         }
     }
 }
 
-void handle_bg_command(char** string) {
-    //printf("TODO: background process\n");
-    pid_t = pid;
+void handleBGCommand(char** string) {
+    pid_t pid;
 
-    printf("calling handle_bg\n");
     if ((pid = fork()) == 0) {
         char** droppedAmp = dropAmpersand(string);
 
-        printf("droppedAmp = %s\n", *droppedAmp);
         if (execvp(string[0], droppedAmp) < 0) {
-            printf("execvp failed\n");
+            printf("ERROR: execvp() failed\n");
         } else {
-            printf("execvp succeeded\n");
+            printf("ERROR: execvp() succeeded\n");
         }
     } else { // Parent process
-        printf("parent process\n");
-        return;
+        ;
     }
 }
-
 
 void execute(char* args[]) {
     if (strcmp(args[0], "exit") == 0) { exit(1); }
@@ -222,33 +221,19 @@ void execute(char* args[]) {
     int argLen = len(args);
 
     if (strcmp(args[argLen-1], "&") != 0) {
-        printf("no background process\n");
-        handle_command(args, argLen);
+        printf("being called in if of execute\n");
+        handleCommand(args, argLen);
     } else {
-        printf("handle_bg_command\n")
-        handle_bg_command(args);
+        handleBGCommand(args);
     }
 }
 
 int main(int argc, char* argv[]) {
-    //int i;
-    char inputLine[1024];
+    char inputLine[MAX_INPUT_SIZE];
     char** tokens;
+    char** deep;
 
     while (1) {
-        /*
-        printf("sish:> ");
-        gets(inputLine);
-        printf("\n");
-
-        if (strcmp(inputLine, emptyString) != 0) {
-            tokens = splitString(inputLine, ' ');
-            //test = dropAmpersand(tokens);
-            exitShell(tokens[0]);
-            execute(tokens);
-        }
-        */
-        
         if (isatty(STDIN_FILENO)) {
             printf("sish:> ");
         }
@@ -257,9 +242,11 @@ int main(int argc, char* argv[]) {
         strtok(inputLine, "\n"); // Weird way to remove newline from fgets
 
         tokens = splitString(inputLine, ' ');
-        execute2(tokens);
+        execute(tokens);
 
+        printf("we executed\n");
         // TODO: exit if not TTY ?
+
         if (!isatty(STDIN_FILENO)) { exit(1); }
     }
 
