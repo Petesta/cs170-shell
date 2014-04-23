@@ -183,8 +183,15 @@ int main(int argc, char* argv[]) {
         fgets(inputLine, MAX_INPUT_SIZE, stdin);
         strtok(inputLine, "\n"); // Weird way to remove newline from fgets
 
+
         tokens = splitString(inputLine, ' ');
-        execute(tokens);
+
+        if (strcmp(tokens[0], "\n") == 0) {
+            // Empty input, do nothing
+            ;
+        } else {
+            execute(tokens);
+        }
 
         // TODO: exit if not TTY ?
         if (!isatty(STDIN_FILENO)) { exit(1); }
