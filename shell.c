@@ -161,6 +161,8 @@ void handleBGCommand(char* args[], int argLen) {
 void execute(char* args[]) {
     if (strcmp(args[0], "exit") == 0) { exit(1); }
 
+    // TODO: have to implement cd ?
+
     int argLen = len(args);
 
     if (strcmp(args[argLen-1], "&") != 0) {
