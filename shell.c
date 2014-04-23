@@ -13,7 +13,6 @@
 // TODO: Whitespace Characters
 // TODO: Error Handling (malformed string inputs)
 
-
 int len(char** array) {
     int length = 0;
 
@@ -26,8 +25,30 @@ int len(char** array) {
 }
 
 
-// void deleteAtPosition(char* array[], int pos) {
-// }
+// Delete a slice out of a char array, returning a new array
+// with the elements removed
+//
+// Ex:
+//   array = [a b c d e f]
+//   array = deleteSlice(array, 1, 3)
+//   // => [a e f]
+//
+char** deleteSlice(char* array[], int start, int end) {
+    int arrayLen = len(array);
+    int newCount = arrayLen - (end-start);
+    char** newArray = malloc(sizeof(char*) * newCount);
+
+    int i;
+    int j = 0;
+    for (i=0; i<arrayLen; i++) {
+        if (i < start || i > end) {
+            *(newArray+j) = strdup(array[i]);
+            j++;
+        }
+    }
+
+    return newArray;
+}
 
 
 char** splitString(char* string, const char charDelim) {
@@ -48,6 +69,7 @@ char** splitString(char* string, const char charDelim) {
 
         tmp++;
     }
+
 
     // Add space for trailing token
     // TODO: wtf is this
@@ -82,33 +104,8 @@ char** splitString(char* string, const char charDelim) {
 //
 // To be run only from within forked child process
 void handleOutputRedirection(char* args[], int argLen) {
-    char* outputFilename = NULL;
-    int i;
-
-    for (i = 0; i < argLen; i++) {
-        if (strcmp(args[i], ">") == 0) {
-            outputFilename = args[i + 1];
-            // TODO: hacky way to "slice off" output redirection arguments before
-            // passing to execvp()
-            args[i] = '\0';
-            break;
-        }
-    }
-
-    if (outputFilename != NULL) {
-        FILE* outputFile = fopen(outputFilename, "w+");
-
-        if (outputFile == NULL) {
-            printf("ERROR: failed to open output file\n");
-            exit(1);
-        }
-
-        if (dup2(fileno(outputFile), STDOUT_FILENO) < 0) {
-          printf("ERROR: in dup2()\n");
-          exit(1);
-        }
-    }
 }
+
 
 void handleCommand(char* args[], int argLen) {
     int status;
@@ -120,9 +117,42 @@ void handleCommand(char* args[], int argLen) {
     } else if (pid == 0) {
         // Child
 
-        // TODO: handle_input_redirection(args, argLen);
-        handleOutputRedirection(args, argLen);
 
+        // TODO: handle_input_redirection(args, argLen);
+
+
+        // Output redirection
+        // TODO: if this is going to be in a separate function, deleteSlice
+        // has to modify the args reference
+        // --------------------------------------
+        char* outputFilename = NULL;
+        int i;
+
+        for (i = 0; i < argLen; i++) {
+            if (strcmp(args[i], ">") == 0) {
+                outputFilename = args[i + 1];
+                args = deleteSlice(args, i, i+1); // Delete ">" and filename
+                break;
+            }
+        }
+
+        if (outputFilename != NULL) {
+            FILE* outputFile = fopen(outputFilename, "w+");
+
+            if (outputFile == NULL) {
+                printf("ERROR: failed to open output file\n");
+                exit(1);
+            }
+
+            if (dup2(fileno(outputFile), STDOUT_FILENO) < 0) {
+              printf("ERROR: in dup2()\n");
+              exit(1);
+            }
+        }
+
+
+        // Exec
+        // --------------------------------------
         if (execvp(args[0], args) < 0) {
             printf("ERROR: execvp() failed\n");
             exit(1);
@@ -148,6 +178,7 @@ void handleBGCommand(char* args[], int argLen) {
         args[argLen-1] = '\0'; // "Trim" ampersand
 
         if (execvp(args[0], args) < 0) {
+            // TODO: handle command not found vs command failed
             printf("ERROR: execvp() failed\n");
             exit(1);
         }
