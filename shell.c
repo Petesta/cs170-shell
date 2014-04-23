@@ -6,22 +6,13 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-const char* ampString  = "&";
-const char* emptyString = "";
-const char* exitString = "exit";
-
 #define MAX_INPUT_SIZE 1024
-
-// Basic commands working (i.e. `ls`, `pwd`)
-// Command line arguments working (i.e. `ls -l`)
-// Exiting the shell working (i.e. command `exit`)
 
 // TODO: Input/Output Redirection
 // TODO: Background Processes
 // TODO: Whitespace Characters
 // TODO: Error Handling (malformed string inputs)
 
-void exitShell(char *string) { if (strcmp(string, exitString) == 0) { exit(1); }}
 
 int len(char** array) {
     int length = 0;
@@ -34,28 +25,10 @@ int len(char** array) {
     return length;
 }
 
-// TODO: We'll eventually want to drop any string from some specified index
-char** dropAmpersand(char** string) {
-    int i = 0;
-    char delim[2];
-    char** newArray;
 
-    delim[0] = ' ';
-    delim[1] = 0;
-    newArray = (char**)malloc(sizeof(char *) * (len(string) - 1));
-
-    while (i < len(string) - 1) { *(newArray + i++) = strdup(string[i]); }
-
-    return newArray;
-}
-
-// void deleteAtPosition(char** array, int pos) {
-//     int c;
-//     int length = len(array);
-//     for (c=pos; c<length-1; c++) {
-//          array[c] = array[c+1];
-//     }
+// void deleteAtPosition(char* array[], int pos) {
 // }
+
 
 char** splitString(char* string, const char charDelim) {
     char delim[2];
@@ -76,12 +49,13 @@ char** splitString(char* string, const char charDelim) {
         tmp++;
     }
 
-    count += lastChar < (string + strlen(string) - 1); // Add space for trailing token
+    // Add space for trailing token
+    // TODO: wtf is this
+    count += lastChar < (string + strlen(string) - 1);
 
-    /* Add space for terminating null string so caller
-       knows where the list of returned strings ends. */
-
+    // Add space for null terminator
     count++;
+
     result = malloc(sizeof(char*) * count);
 
     if (result) {
@@ -94,7 +68,6 @@ char** splitString(char* string, const char charDelim) {
             token = strtok(0, delim);
         }
 
-        printf("idx = %d and count = %d\n", idx, count);
         assert(idx == count - 1);
         *(result + idx) = 0;
     }
@@ -102,43 +75,6 @@ char** splitString(char* string, const char charDelim) {
     return result;
 }
 
-// execpv() can call relative to your position
-void execute2(char* array[]) {
-    int i = 0;
-    int length;
-    int status;
-    pid_t pid;
-
-    length = len(array);
-
-    if (strcmp(array[length - 1], ampString) != 0 ) { // No background process for this command
-        if ((pid = fork()) < 0) { // Failed forked process
-            printf("ERROR: failed to fork child process\n");
-            exit(1);
-        } else if (pid == 0) {  // For the child process
-            if (execvp(array[0], array) < 0) { // Execute the command
-                printf("ERROR: exec failed\n");
-                exit(1);
-            }
-        } else {                         // For the parent process
-            while (wait(&status) != pid) // Wait for completion
-                ;
-        }
-    } else { // This case handles the background process waiting to happen (i.e. &)
-
-        if ((pid = fork()) == 0) { // Child process
-            char** droppedAmp = dropAmpersand(array);
-
-            if (execvp(array[0], droppedAmp) < 0) {
-                printf("execvp failed\n");
-            } else {
-                printf("execvp succeeded\n");
-            }
-        } else { // Parent process 
-            return;
-        }
-    }
-}
 
 // Check if output is being redirected; if so,
 // set our stdout to the file descriptor of the specified
@@ -188,8 +124,7 @@ void handleCommand(char* args[], int argLen) {
         handleOutputRedirection(args, argLen);
 
         if (execvp(args[0], args) < 0) {
-            printf("i am running here\n");
-            printf("here ERROR: execvp() failed\n");
+            printf("ERROR: execvp() failed\n");
             exit(1);
         }
     } else { // Parent Process
@@ -199,21 +134,29 @@ void handleCommand(char* args[], int argLen) {
     }
 }
 
-void handleBGCommand(char** string) {
-    pid_t pid;
 
-    if ((pid = fork()) == 0) {
-        char** droppedAmp = dropAmpersand(string);
+void handleBGCommand(char* args[], int argLen) {
+    pid_t pid = fork();
 
-        if (execvp(string[0], droppedAmp) < 0) {
+    if (pid < 0) {
+        printf("ERROR: fork() failed\n");
+        exit(1);
+    } else if (pid == 0) {
+        // Child
+
+        // TODO: handle redirection
+        args[argLen-1] = '\0'; // "Trim" ampersand
+
+        if (execvp(args[0], args) < 0) {
             printf("ERROR: execvp() failed\n");
-        } else {
-            printf("ERROR: execvp() succeeded\n");
+            exit(1);
         }
-    } else { // Parent process
+    } else {
+        // Parent
         ;
     }
 }
+
 
 void execute(char* args[]) {
     if (strcmp(args[0], "exit") == 0) { exit(1); }
@@ -221,17 +164,16 @@ void execute(char* args[]) {
     int argLen = len(args);
 
     if (strcmp(args[argLen-1], "&") != 0) {
-        printf("being called in if of execute\n");
         handleCommand(args, argLen);
     } else {
-        handleBGCommand(args);
+        handleBGCommand(args, argLen);
     }
 }
+
 
 int main(int argc, char* argv[]) {
     char inputLine[MAX_INPUT_SIZE];
     char** tokens;
-    char** deep;
 
     while (1) {
         if (isatty(STDIN_FILENO)) {
@@ -244,9 +186,7 @@ int main(int argc, char* argv[]) {
         tokens = splitString(inputLine, ' ');
         execute(tokens);
 
-        printf("we executed\n");
         // TODO: exit if not TTY ?
-
         if (!isatty(STDIN_FILENO)) { exit(1); }
     }
 
