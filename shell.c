@@ -26,12 +26,24 @@ int len(char** array) {
     return length;
 }
 
+
+int findIndex(char* args[], const char* charDelim) {
+    int i;
+
+    for (i = 0; i < len(args); i++) {
+        if (strcmp(args[i], charDelim) == 0) {
+            printf("args: %s\n", args[i]);
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 // 1 indicates success and 0 failure
 int contains(char* string[], const char* charDelim) {
     int i;
     int length = len(string);
-
-    //printf("printing the string = %s\n", string[0]);
 
     for (i = 0; i < length ; i++) {
         if (strstr(string[i], charDelim) != NULL) {
@@ -115,9 +127,9 @@ char** splitString(char* string, const char charDelim) {
     return result;
 }
 
-
-void handleInputRedirection(char* args[], int argLen) {
-    int fD = open(args[argLen-1], O_RDONLY, 0);
+// Right now we are grabbing the filename through the 3rd index
+void handleInputRedirection(char* args[]) {
+    int fD = open(args[2], O_RDONLY, 0);
 
     if (fD < 0) { printf("ERROR: failed to open input file\n"); }
     if (dup2(fD, STDIN_FILENO) < 0) {
@@ -134,8 +146,25 @@ void handleInputRedirection(char* args[], int argLen) {
 // output file
 //
 // To be run only from within forked child process
+// TODO: File is being created but the data that should be written is not there
+/*
 void handleOutputRedirection(char* args[], int argLen) {
+    const char* output = ">";
+    int outputFlag = contains(args, output);
+
+    if (outputFlag) {
+        int fD = open(args[argLen-1], O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR);
+
+        if (fD < 0) { printf("ERROR: failed to open output file\n"); }
+        if (dup2(fD, STDOUT_FILENO) < 0) {
+            printf("ERROR: in dup2()\n");
+            exit(1);
+        }
+
+        close(fD);
+    }
 }
+*/
 
 
 void handleCommand(char* args[], int argLen) {
@@ -147,15 +176,20 @@ void handleCommand(char* args[], int argLen) {
         exit(1);
     } else if (pid == 0) { // Child Process
         const char* input = "<";
+        //const char* output = ">";
         int inputFlag = contains(args, input);
 
         if (inputFlag) {
-            handleInputRedirection();
+            handleInputRedirection(args);
         }
 
 
-        // TODO: handle_input_redirection(args, argLen);
-
+        /*
+        if (contains(args, output) == 1) {
+            handleOutputRedirection(args, argLen);
+            args = deleteSlice(args, 1, argLen - 1);
+        }
+        */
 
         // Output redirection
         // TODO: if this is going to be in a separate function, deleteSlice
@@ -164,7 +198,9 @@ void handleCommand(char* args[], int argLen) {
         char* outputFilename = NULL;
         int i;
 
+        //printf("args = %s\n", args[1]);
         for (i = 0; i < argLen; i++) {
+            //printf("outputFilename = %s\n", args[1]);
             if (strcmp(args[i], ">") == 0) {
                 outputFilename = args[i + 1];
                 args = deleteSlice(args, i, i+1); // Delete ">" and filename
@@ -188,8 +224,10 @@ void handleCommand(char* args[], int argLen) {
 
         // Exec
         // --------------------------------------
+        printf("inputFlag = %d\n", inputFlag);
         if (inputFlag) {
             char** cat = deleteSlice(args, 1, argLen - 1);
+            printf("inside inputFlag\n");
 
             if (execvp(args[0], cat) < 0) {
                 printf("ERROR: execvp() failed\n");
@@ -259,7 +297,6 @@ int main(int argc, char* argv[]) {
 
         fgets(inputLine, MAX_INPUT_SIZE, stdin);
         strtok(inputLine, "\n"); // Weird way to remove newline from fgets
-
 
         tokens = splitString(inputLine, ' ');
 
