@@ -1,7 +1,9 @@
 #include <assert.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -22,6 +24,22 @@ int len(char** array) {
     }
 
     return length;
+}
+
+// 1 indicates success and 0 failure
+int contains(char* string[], const char* charDelim) {
+    int i;
+    int length = len(string);
+
+    //printf("printing the string = %s\n", string[0]);
+
+    for (i = 0; i < length ; i++) {
+        if (strstr(string[i], charDelim) != NULL) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 
@@ -98,6 +116,13 @@ char** splitString(char* string, const char charDelim) {
 }
 
 
+void handleInputRedirection() {
+    int fD = open("input", O_RDONLY, 0);
+    dup2(fD, STDIN_FILENO);
+    close(fD);
+}
+
+
 // Check if output is being redirected; if so,
 // set our stdout to the file descriptor of the specified
 // output file
@@ -114,8 +139,13 @@ void handleCommand(char* args[], int argLen) {
     if (pid < 0) {
         printf("ERROR: fork() failed\n");
         exit(1);
-    } else if (pid == 0) {
-        // Child
+    } else if (pid == 0) { // Child Process
+        const char* input = "<";
+        int containsFlag = contains(args, input);
+
+        if (containsFlag) {
+            handleInputRedirection();
+        }
 
 
         // TODO: handle_input_redirection(args, argLen);
@@ -149,7 +179,6 @@ void handleCommand(char* args[], int argLen) {
               exit(1);
             }
         }
-
 
         // Exec
         // --------------------------------------
