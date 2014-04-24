@@ -118,7 +118,13 @@ char** splitString(char* string, const char charDelim) {
 
 void handleInputRedirection(char* args[], int argLen) {
     int fD = open(args[argLen-1], O_RDONLY, 0);
-    dup2(fD, STDIN_FILENO);
+
+    if (fD < 0) { printf("ERROR: failed to open input file\n"); }
+    if (dup2(fD, STDIN_FILENO) < 0) {
+        printf("ERROR: in dup2()\n");
+        exit(1);
+    }
+
     close(fD);
 }
 
@@ -141,9 +147,9 @@ void handleCommand(char* args[], int argLen) {
         exit(1);
     } else if (pid == 0) { // Child Process
         const char* input = "<";
-        int containsFlag = contains(args, input);
+        int inputFlag = contains(args, input);
 
-        if (containsFlag) {
+        if (inputFlag) {
             handleInputRedirection();
         }
 
@@ -182,7 +188,7 @@ void handleCommand(char* args[], int argLen) {
 
         // Exec
         // --------------------------------------
-        if (containsFlag) {
+        if (inputFlag) {
             char** cat = deleteSlice(args, 1, argLen - 1);
 
             if (execvp(args[0], cat) < 0) {
