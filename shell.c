@@ -116,8 +116,8 @@ char** splitString(char* string, const char charDelim) {
 }
 
 
-void handleInputRedirection() {
-    int fD = open("input", O_RDONLY, 0);
+void handleInputRedirection(char* args[], int argLen) {
+    int fD = open(args[argLen-1], O_RDONLY, 0);
     dup2(fD, STDIN_FILENO);
     close(fD);
 }
@@ -182,9 +182,18 @@ void handleCommand(char* args[], int argLen) {
 
         // Exec
         // --------------------------------------
-        if (execvp(args[0], args) < 0) {
-            printf("ERROR: execvp() failed\n");
-            exit(1);
+        if (containsFlag) {
+            char** cat = deleteSlice(args, 1, argLen - 1);
+
+            if (execvp(args[0], cat) < 0) {
+                printf("ERROR: execvp() failed\n");
+                exit(1);
+            }
+        } else {
+            if (execvp(args[0], args) < 0) {
+                printf("ERROR: execvp() failed\n");
+                exit(1);
+            }
         }
     } else { // Parent Process
         while (wait(&status) != pid) {
