@@ -127,44 +127,39 @@ char** splitString(char* string, const char charDelim) {
     return result;
 }
 
-// Right now we are grabbing the filename through the 3rd index
-void handleInputRedirection(char* args[]) {
-    int fD = open(args[2], O_RDONLY, 0);
 
-    if (fD < 0) { printf("ERROR: failed to open input file\n"); }
-    if (dup2(fD, STDIN_FILENO) < 0) {
-        printf("ERROR: in dup2()\n");
+// Handling input and output redirection are basically the same thing -
+// grab a FD and set one of our own FDs to it
+void handleGenericRedirection(char* args[], int opIdx, int streamFileno, char* mode) {
+    char* filename = args[opIdx+1];
+    FILE* f = fopen(filename, mode);
+
+    if (f == NULL) {
+        printf("ERROR: failed to open redirect file %s\n", filename);
         exit(1);
     }
 
-    close(fD);
-}
-
-
-// Check if output is being redirected; if so,
-// set our stdout to the file descriptor of the specified
-// output file
-//
-// To be run only from within forked child process
-// TODO: File is being created but the data that should be written is not there
-/*
-void handleOutputRedirection(char* args[], int argLen) {
-    const char* output = ">";
-    int outputFlag = contains(args, output);
-
-    if (outputFlag) {
-        int fD = open(args[argLen-1], O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR);
-
-        if (fD < 0) { printf("ERROR: failed to open output file\n"); }
-        if (dup2(fD, STDOUT_FILENO) < 0) {
-            printf("ERROR: in dup2()\n");
-            exit(1);
-        }
-
-        close(fD);
+    if (dup2(fileno(f), streamFileno) < 0) {
+        printf("ERROR: in dup2()\n");
+        exit(1);
     }
 }
-*/
+
+
+// Find specified input file and set our stdin FD to it
+// Intended to be run from within child process
+// Slicing of operator + filename occurs outside of this function
+void handleInputRedirection(char* args[], int inputRedirIdx) {
+    handleGenericRedirection(args, inputRedirIdx, STDIN_FILENO, "r");
+}
+
+
+// Find specified output file and set our stdout FD to it
+// Intended to be run from within child process
+// Slicing of operator + filename occurs outside of this function
+void handleOutputRedirection(char* args[], int outputRedirIdx) {
+    handleGenericRedirection(args, outputRedirIdx, STDOUT_FILENO, "w+");
+}
 
 
 void handleCommand(char* args[], int argLen) {
@@ -174,72 +169,31 @@ void handleCommand(char* args[], int argLen) {
     if (pid < 0) {
         printf("ERROR: fork() failed\n");
         exit(1);
-    } else if (pid == 0) { // Child Process
-        const char* input = "<";
-        //const char* output = ">";
-        int inputFlag = contains(args, input);
+    } else if (pid == 0) {
+        // Child
 
-        if (inputFlag) {
-            handleInputRedirection(args);
+        int inputRedirIdx = findIndex(args, "<");
+        if (inputRedirIdx > -1) {
+            handleInputRedirection(args, inputRedirIdx);
+            args = deleteSlice(args, inputRedirIdx, inputRedirIdx+1);
         }
 
-
-        /*
-        if (contains(args, output) == 1) {
-            handleOutputRedirection(args, argLen);
-            args = deleteSlice(args, 1, argLen - 1);
-        }
-        */
-
-        // Output redirection
-        // TODO: if this is going to be in a separate function, deleteSlice
-        // has to modify the args reference
-        // --------------------------------------
-        char* outputFilename = NULL;
-        int i;
-
-        //printf("args = %s\n", args[1]);
-        for (i = 0; i < argLen; i++) {
-            //printf("outputFilename = %s\n", args[1]);
-            if (strcmp(args[i], ">") == 0) {
-                outputFilename = args[i + 1];
-                args = deleteSlice(args, i, i+1); // Delete ">" and filename
-                break;
-            }
+        int outputRedirIdx = findIndex(args, ">");
+        if (outputRedirIdx > -1) {
+            handleOutputRedirection(args, outputRedirIdx);
+            args = deleteSlice(args, outputRedirIdx, outputRedirIdx+1);
         }
 
-        if (outputFilename != NULL) {
-            FILE* outputFile = fopen(outputFilename, "w+");
-
-            if (outputFile == NULL) {
-                printf("ERROR: failed to open output file\n");
-                exit(1);
-            }
-
-            if (dup2(fileno(outputFile), STDOUT_FILENO) < 0) {
-              printf("ERROR: in dup2()\n");
-              exit(1);
-            }
-        }
 
         // Exec
         // --------------------------------------
-        printf("inputFlag = %d\n", inputFlag);
-        if (inputFlag) {
-            char** cat = deleteSlice(args, 1, argLen - 1);
-            printf("inside inputFlag\n");
-
-            if (execvp(args[0], cat) < 0) {
-                printf("ERROR: execvp() failed\n");
-                exit(1);
-            }
-        } else {
-            if (execvp(args[0], args) < 0) {
-                printf("ERROR: execvp() failed\n");
-                exit(1);
-            }
+        if (execvp(args[0], args) < 0) {
+            printf("ERROR: execvp() failed\n");
+            exit(1);
         }
-    } else { // Parent Process
+    } else {
+        // Parent
+
         while (wait(&status) != pid) {
             ; // Wait for child to finish
         }
