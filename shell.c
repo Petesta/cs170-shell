@@ -9,9 +9,10 @@
 #include <unistd.h>
 
 #define MAX_INPUT_SIZE 1024
+#define TRUE 1
+#define FALSE 0
 
 // TODO: Input/Output Redirection
-// TODO: Background Processes
 // TODO: Whitespace Characters
 // TODO: Error Handling (malformed string inputs)
 
@@ -27,31 +28,18 @@ int len(char** array) {
 }
 
 
+// Find the index of a string in an array of strings
+// Returns -1 if not found
 int findIndex(char* args[], const char* charDelim) {
     int i;
 
     for (i = 0; i < len(args); i++) {
         if (strcmp(args[i], charDelim) == 0) {
-            printf("args: %s\n", args[i]);
             return i;
         }
     }
 
     return -1;
-}
-
-// 1 indicates success and 0 failure
-int contains(char* string[], const char* charDelim) {
-    int i;
-    int length = len(string);
-
-    for (i = 0; i < length ; i++) {
-        if (strstr(string[i], charDelim) != NULL) {
-            return 1;
-        }
-    }
-
-    return 0;
 }
 
 
@@ -162,7 +150,8 @@ void handleOutputRedirection(char* args[], int outputRedirIdx) {
 }
 
 
-void handleCommand(char* args[], int argLen) {
+// Wire up I/O redirection as necessary and fork() / exec()
+void handleCommand(char* args[], int argLen, int doWait) {
     int status;
     pid_t pid = fork();
 
@@ -194,33 +183,11 @@ void handleCommand(char* args[], int argLen) {
     } else {
         // Parent
 
-        while (wait(&status) != pid) {
-            ; // Wait for child to finish
+        if (doWait) {
+            while (wait(&status) != pid) {
+                ; // Wait for child to finish
+            }
         }
-    }
-}
-
-
-void handleBGCommand(char* args[], int argLen) {
-    pid_t pid = fork();
-
-    if (pid < 0) {
-        printf("ERROR: fork() failed\n");
-        exit(1);
-    } else if (pid == 0) {
-        // Child
-
-        // TODO: handle redirection
-        args[argLen-1] = '\0'; // "Trim" ampersand
-
-        if (execvp(args[0], args) < 0) {
-            // TODO: handle command not found vs command failed
-            printf("ERROR: execvp() failed\n");
-            exit(1);
-        }
-    } else {
-        // Parent
-        ;
     }
 }
 
@@ -232,11 +199,15 @@ void execute(char* args[]) {
 
     int argLen = len(args);
 
+    int doWait;
     if (strcmp(args[argLen-1], "&") != 0) {
-        handleCommand(args, argLen);
+        doWait = TRUE; // Normal command
     } else {
-        handleBGCommand(args, argLen);
+        args = deleteSlice(args, argLen-1, argLen-1);
+        doWait = FALSE; // bg command
     }
+
+    handleCommand(args, argLen, doWait);
 }
 
 
