@@ -1,15 +1,18 @@
 #include <assert.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #define MAX_INPUT_SIZE 1024
+#define TRUE 1
+#define FALSE 0
 
 // TODO: Input/Output Redirection
-// TODO: Background Processes
 // TODO: Whitespace Characters
 // TODO: Error Handling (malformed string inputs)
 
@@ -22,6 +25,21 @@ int len(char** array) {
     }
 
     return length;
+}
+
+
+// Find the index of a string in an array of strings
+// Returns -1 if not found
+int findIndex(char* args[], const char* charDelim) {
+    int i;
+
+    for (i = 0; i < len(args); i++) {
+        if (strcmp(args[i], charDelim) == 0) {
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 
@@ -98,16 +116,42 @@ char** splitString(char* string, const char charDelim) {
 }
 
 
-// Check if output is being redirected; if so,
-// set our stdout to the file descriptor of the specified
-// output file
-//
-// To be run only from within forked child process
-void handleOutputRedirection(char* args[], int argLen) {
+// Handling input and output redirection are basically the same thing -
+// grab a FD and set one of our own FDs to it
+void handleGenericRedirection(char* args[], int opIdx, int streamFileno, char* mode) {
+    char* filename = args[opIdx+1];
+    FILE* f = fopen(filename, mode);
+
+    if (f == NULL) {
+        printf("ERROR: failed to open redirect file %s\n", filename);
+        exit(1);
+    }
+
+    if (dup2(fileno(f), streamFileno) < 0) {
+        printf("ERROR: in dup2()\n");
+        exit(1);
+    }
 }
 
 
-void handleCommand(char* args[], int argLen) {
+// Find specified input file and set our stdin FD to it
+// Intended to be run from within child process
+// Slicing of operator + filename occurs outside of this function
+void handleInputRedirection(char* args[], int inputRedirIdx) {
+    handleGenericRedirection(args, inputRedirIdx, STDIN_FILENO, "r");
+}
+
+
+// Find specified output file and set our stdout FD to it
+// Intended to be run from within child process
+// Slicing of operator + filename occurs outside of this function
+void handleOutputRedirection(char* args[], int outputRedirIdx) {
+    handleGenericRedirection(args, outputRedirIdx, STDOUT_FILENO, "w+");
+}
+
+
+// Wire up I/O redirection as necessary and fork() / exec()
+void handleCommand(char* args[], int argLen, int doWait) {
     int status;
     pid_t pid = fork();
 
@@ -117,37 +161,16 @@ void handleCommand(char* args[], int argLen) {
     } else if (pid == 0) {
         // Child
 
-
-        // TODO: handle_input_redirection(args, argLen);
-
-
-        // Output redirection
-        // TODO: if this is going to be in a separate function, deleteSlice
-        // has to modify the args reference
-        // --------------------------------------
-        char* outputFilename = NULL;
-        int i;
-
-        for (i = 0; i < argLen; i++) {
-            if (strcmp(args[i], ">") == 0) {
-                outputFilename = args[i + 1];
-                args = deleteSlice(args, i, i+1); // Delete ">" and filename
-                break;
-            }
+        int inputRedirIdx = findIndex(args, "<");
+        if (inputRedirIdx > -1) {
+            handleInputRedirection(args, inputRedirIdx);
+            args = deleteSlice(args, inputRedirIdx, inputRedirIdx+1);
         }
 
-        if (outputFilename != NULL) {
-            FILE* outputFile = fopen(outputFilename, "w+");
-
-            if (outputFile == NULL) {
-                printf("ERROR: failed to open output file\n");
-                exit(1);
-            }
-
-            if (dup2(fileno(outputFile), STDOUT_FILENO) < 0) {
-              printf("ERROR: in dup2()\n");
-              exit(1);
-            }
+        int outputRedirIdx = findIndex(args, ">");
+        if (outputRedirIdx > -1) {
+            handleOutputRedirection(args, outputRedirIdx);
+            args = deleteSlice(args, outputRedirIdx, outputRedirIdx+1);
         }
 
 
@@ -157,34 +180,14 @@ void handleCommand(char* args[], int argLen) {
             printf("ERROR: execvp() failed\n");
             exit(1);
         }
-    } else { // Parent Process
-        while (wait(&status) != pid) {
-            ; // Wait for child to finish
-        }
-    }
-}
-
-
-void handleBGCommand(char* args[], int argLen) {
-    pid_t pid = fork();
-
-    if (pid < 0) {
-        printf("ERROR: fork() failed\n");
-        exit(1);
-    } else if (pid == 0) {
-        // Child
-
-        // TODO: handle redirection
-        args[argLen-1] = '\0'; // "Trim" ampersand
-
-        if (execvp(args[0], args) < 0) {
-            // TODO: handle command not found vs command failed
-            printf("ERROR: execvp() failed\n");
-            exit(1);
-        }
     } else {
         // Parent
-        ;
+
+        if (doWait) {
+            while (wait(&status) != pid) {
+                ; // Wait for child to finish
+            }
+        }
     }
 }
 
@@ -196,11 +199,15 @@ void execute(char* args[]) {
 
     int argLen = len(args);
 
+    int doWait;
     if (strcmp(args[argLen-1], "&") != 0) {
-        handleCommand(args, argLen);
+        doWait = TRUE; // Normal command
     } else {
-        handleBGCommand(args, argLen);
+        args = deleteSlice(args, argLen-1, argLen-1);
+        doWait = FALSE; // bg command
     }
+
+    handleCommand(args, argLen, doWait);
 }
 
 
@@ -215,7 +222,6 @@ int main(int argc, char* argv[]) {
 
         fgets(inputLine, MAX_INPUT_SIZE, stdin);
         strtok(inputLine, "\n"); // Weird way to remove newline from fgets
-
 
         tokens = splitString(inputLine, ' ');
 
