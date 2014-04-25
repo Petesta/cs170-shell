@@ -12,7 +12,7 @@
 #define TRUE 1
 #define FALSE 0
 
-// TODO: Input/Output Redirection
+// TODO: Pipes
 // TODO: Whitespace Characters
 // TODO: Error Handling (malformed string inputs)
 
@@ -25,6 +25,19 @@ int len(char** array) {
     }
 
     return length;
+}
+
+
+// Returns the number of matches to the charDelim, used for counting pipes
+int numChar(char* args[], const char* charDelim) {
+    int i;
+    int count = 0;
+
+    for (i = 0; i < len(args); i++) {
+        if (strcmp(args[i], charDelim) == 0) { count++; }
+    }
+
+    return count;
 }
 
 
@@ -151,41 +164,48 @@ void handleOutputRedirection(char* args[], int outputRedirIdx) {
 
 
 // Wire up I/O redirection as necessary and fork() / exec()
-void handleCommand(char* args[], int argLen, int doWait) {
-    int status;
-    pid_t pid = fork();
+void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int changeDir) {
+    int runs;
 
-    if (pid < 0) {
-        printf("ERROR: fork() failed\n");
-        exit(1);
-    } else if (pid == 0) {
-        // Child
-
-        int inputRedirIdx = findIndex(args, "<");
-        if (inputRedirIdx > -1) {
-            handleInputRedirection(args, inputRedirIdx);
-            args = deleteSlice(args, inputRedirIdx, inputRedirIdx+1);
-        }
-
-        int outputRedirIdx = findIndex(args, ">");
-        if (outputRedirIdx > -1) {
-            handleOutputRedirection(args, outputRedirIdx);
-            args = deleteSlice(args, outputRedirIdx, outputRedirIdx+1);
-        }
-
-
-        // Exec
-        // --------------------------------------
-        if (execvp(args[0], args) < 0) {
-            printf("ERROR: execvp() failed\n");
-            exit(1);
-        }
+    if (changeDir == 0) {
+        chdir(args[1]);
     } else {
-        // Parent
+        for (runs = 0; runs < pipedCommands + 1; runs++) { // Executes as many times as there are pipes + 1
+            int status;
+            pid_t pid = fork();
 
-        if (doWait) {
-            while (wait(&status) != pid) {
-                ; // Wait for child to finish
+            if (pid < 0) {
+                printf("ERROR: fork() failed\n");
+                exit(1);
+            } else if (pid == 0) {
+                // Child
+
+                int inputRedirIdx = findIndex(args, "<");
+                if (inputRedirIdx > -1) {
+                    handleInputRedirection(args, inputRedirIdx);
+                    args = deleteSlice(args, inputRedirIdx, inputRedirIdx+1);
+                }
+
+                int outputRedirIdx = findIndex(args, ">");
+                if (outputRedirIdx > -1) {
+                    handleOutputRedirection(args, outputRedirIdx);
+                    args = deleteSlice(args, outputRedirIdx, outputRedirIdx+1);
+                }
+
+                // Exec
+                // --------------------------------------
+                if (execvp(args[0], args) < 0) {
+                    printf("ERROR: execvp() failed\n");
+                    exit(1);
+                }
+            } else {
+                // Parent
+
+                if (doWait) {
+                    while (wait(&status) != pid) {
+                        ; // Wait for child to finish
+                    }
+                }
             }
         }
     }
@@ -195,11 +215,11 @@ void handleCommand(char* args[], int argLen, int doWait) {
 void execute(char* args[]) {
     if (strcmp(args[0], "exit") == 0) { exit(1); }
 
-    // TODO: have to implement cd ?
-
-    int argLen = len(args);
-
     int doWait;
+    int argLen = len(args);
+    int chDir = strcmp(args[0], "cd"); // O confirms `cd` is the first argument
+    int pipeCount = numChar(args, "|");
+
     if (strcmp(args[argLen-1], "&") != 0) {
         doWait = TRUE; // Normal command
     } else {
@@ -207,7 +227,7 @@ void execute(char* args[]) {
         doWait = FALSE; // bg command
     }
 
-    handleCommand(args, argLen, doWait);
+    handleCommand(args, argLen, doWait, pipeCount, chDir);
 }
 
 
