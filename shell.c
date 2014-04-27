@@ -230,7 +230,7 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                     }
                 }
             }
-        } else { // TODO: Executing piped commands
+        } else { // Executing pipes
             int j, status; 
             char** newArgs;
             char** lastArg = lastCommand(args);
@@ -243,12 +243,26 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                 args = deleteSlice(args, 0, findIndex(args, "|"));
             }
 
+            for (j = 0; j < pipedCommands; j++) {
+                if (findIndex(test[j], ">") != -1) {
+                    test[j] = deleteSlice(*test, findIndex(test[i], ">"), len(test[j]));
+                }
+            }
+
             pid = fork();
 
             if (pid < 0) {
                 printf("ERROR: fork() failed\n");
                 exit(1);
             } else if (pid == 0) {
+
+                int inputRedirIdx = findIndex(test[i], "<");
+                if (inputRedirIdx > -1) {
+                    handleInputRedirection(test[i], inputRedirIdx);
+                    test[0] = deleteSlice(*test, inputRedirIdx, inputRedirIdx + 1);
+                }
+                printf("here\n");
+
                   while (i < pipedCommands) {
                       i++;
                       pipe(fd);
@@ -260,10 +274,23 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                           close(fd[1]);
 
 
-                          if (execvp(*test[i - 1], test[i - 1]) < 0) {
-                              printf("ERROR: execvp() failed\n");
-                              exit(1);
+                          // TODO:
+                          if (findIndex(test[i - 1], ">") == -1) {
+                              if (execvp(*test[i - 1], test[i - 1]) < 0) {
+                                  printf("ERROR: execvp() failed\n");
+                                  exit(1);
+                              }
+                          } else {
+                              test[0] = deleteSlice(*test, findIndex(test[i - 1], ">"), len(test[0]));
+                              printf("%s\n", *test[0]);
+                              printf("%s\n", *test[1]);
+                              printf("%s\n", *test[2]);
+                              if (execvp(*test[i - 1], test[i - 1]) < 0) {
+                                  printf("ERROR: execvp() failed\n");
+                                  exit(1);
+                              }
                           }
+                          // TODO:
 
                       } else {
                           if (pid2 < 0) {
@@ -276,6 +303,12 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                           close(fd[0]);
                       }
                   }
+
+                int outputRedirIdx = findIndex(test[i - 1], ">");
+                if (outputRedirIdx > -1) {
+                    handleOutputRedirection(args, outputRedirIdx);
+                    test[0] = deleteSlice(*test, outputRedirIdx, outputRedirIdx + 1);
+                }
 
                   if (execvp(lastArg[0], lastArg) < 0) {
                       printf("ERROR: execvp() failed\n");
