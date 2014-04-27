@@ -221,8 +221,7 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                     printf("ERROR: execvp() failed\n");
                     exit(1);
                 }
-            } else {
-                // Parent
+            } else { // Parent
 
                 if (doWait) {
                     while (wait(&status) != pid) {
@@ -261,7 +260,6 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                     handleInputRedirection(test[i], inputRedirIdx);
                     test[0] = deleteSlice(*test, inputRedirIdx, inputRedirIdx + 1);
                 }
-                printf("here\n");
 
                   while (i < pipedCommands) {
                       i++;
@@ -274,7 +272,6 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                           close(fd[1]);
 
 
-                          // TODO:
                           if (findIndex(test[i - 1], ">") == -1) {
                               if (execvp(*test[i - 1], test[i - 1]) < 0) {
                                   printf("ERROR: execvp() failed\n");
@@ -282,15 +279,11 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                               }
                           } else {
                               test[0] = deleteSlice(*test, findIndex(test[i - 1], ">"), len(test[0]));
-                              printf("%s\n", *test[0]);
-                              printf("%s\n", *test[1]);
-                              printf("%s\n", *test[2]);
                               if (execvp(*test[i - 1], test[i - 1]) < 0) {
                                   printf("ERROR: execvp() failed\n");
                                   exit(1);
                               }
                           }
-                          // TODO:
 
                       } else {
                           if (pid2 < 0) {
@@ -321,7 +314,7 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                 }
 
                 // TODO:
-                waitpid(pid, &status, 0);
+                if (doWait) { waitpid(pid, &status, 0); }
             }
         }
     }
