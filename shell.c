@@ -55,6 +55,27 @@ int findIndex(char* args[], const char* charDelim) {
     return -1;
 }
 
+// ls | wc | grep 1
+// i = 5, 3
+// ls | wc
+// i = 3, 1
+char** lastCommand(char* args[]) {
+    int j = 0;
+    int i = len(args) - 1;
+
+    for (; i > 0; i--) {
+        if (strcmp(args[i], "|") == 0) { break; }
+    }
+
+    char** newArray = malloc(sizeof(char*) * ((len(args) - 1) - i));
+    for (i; i < len(args) - 1; i++) {
+        *(newArray + j) = strdup(args[i + 1]);
+        j++;
+    }
+
+    return newArray;
+}
+
 
 // Delete a slice out of a char array, returning a new array
 // with the elements removed
@@ -101,9 +122,7 @@ char** splitString(char* string, const char charDelim) {
         tmp++;
     }
 
-
     // Add space for trailing token
-    // TODO: wtf is this
     count += lastChar < (string + strlen(string) - 1);
 
     // Add space for null terminator
@@ -166,13 +185,17 @@ void handleOutputRedirection(char* args[], int outputRedirIdx) {
 // Wire up I/O redirection as necessary and fork() / exec()
 void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int changeDir) {
     int runs;
+    int i = 0;
+    int fd[2];
 
     if (changeDir == 0) {
         chdir(args[1]);
     } else {
-        for (runs = 0; runs < pipedCommands + 1; runs++) { // Executes as many times as there are pipes + 1
+        pid_t pid;
+
+        if (pipedCommands == 0) {
             int status;
-            pid_t pid = fork();
+            pid = fork();
 
             if (pid < 0) {
                 printf("ERROR: fork() failed\n");
@@ -207,6 +230,66 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                     }
                 }
             }
+        } else { // TODO: Executing piped commands
+            int j, status; 
+            char** newArgs;
+            char** lastArg = lastCommand(args);
+            pid_t pid2;
+            
+            char*** test = malloc(sizeof(char**) * pipedCommands);
+
+            for (j = 0; j < pipedCommands; j++) {
+                test[j] = deleteSlice(args, findIndex(args, "|"), len(args) - 1);
+                args = deleteSlice(args, 0, findIndex(args, "|"));
+            }
+
+            pid = fork();
+
+            if (pid < 0) {
+                printf("ERROR: fork() failed\n");
+                exit(1);
+            } else if (pid == 0) {
+                  while (i < pipedCommands) {
+                      i++;
+                      pipe(fd);
+                      pid2 = fork();
+
+                      if (pid2 == 0) {
+                          close(fd[0]);
+                          dup2(fd[1], 1);
+                          close(fd[1]);
+
+
+                          if (execvp(*test[i - 1], test[i - 1]) < 0) {
+                              printf("ERROR: execvp() failed\n");
+                              exit(1);
+                          }
+
+                      } else {
+                          if (pid2 < 0) {
+                              printf("ERROR: fork() failed\n");
+                              exit(1);
+                          }
+
+                          close(fd[1]);
+                          dup2(fd[0], 0);
+                          close(fd[0]);
+                      }
+                  }
+
+                  if (execvp(lastArg[0], lastArg) < 0) {
+                      printf("ERROR: execvp() failed\n");
+                      exit(1);
+                  }
+            } else {
+                if (pid < 0) {
+                    printf("ERROR: fork() failed\n");
+                    exit(1);
+                }
+
+                // TODO:
+                waitpid(pid, &status, 0);
+            }
         }
     }
 }
@@ -224,7 +307,7 @@ void execute(char* args[]) {
         doWait = TRUE; // Normal command
     } else {
         args = deleteSlice(args, argLen-1, argLen-1);
-        doWait = FALSE; // bg command
+        doWait = FALSE; // Background command
     }
 
     handleCommand(args, argLen, doWait, pipeCount, chDir);
