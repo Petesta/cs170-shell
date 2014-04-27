@@ -29,12 +29,12 @@ int len(char** array) {
 
 
 // Returns the number of matches to the charDelim, used for counting pipes
-int numChar(char* args[], const char* charDelim) {
+int numChar(char* args[], const char* string) {
     int i;
     int count = 0;
 
     for (i = 0; i < len(args); i++) {
-        if (strcmp(args[i], charDelim) == 0) { count++; }
+        if (strcmp(args[i], string) == 0) { count++; }
     }
 
     return count;
@@ -183,12 +183,14 @@ void handleOutputRedirection(char* args[], int outputRedirIdx) {
 
 
 // Wire up I/O redirection as necessary and fork() / exec()
-void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int changeDir) {
+void handleCommand(char* args[], int argLen, int doWait, int pipedCommands) {
     int runs;
     int i = 0;
     int fd[2];
+    //int chDir = strcmp(args[0], "cd"); // O confirms `cd` is the first argument
 
-    if (changeDir == 0) {
+    //if (changeDir == 0) {
+    if (strcmp(args[0], "cd") == 0) {
         chdir(args[1]);
     } else {
         pid_t pid;
@@ -231,20 +233,19 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
             }
         } else { // Executing pipes
             int j, status; 
-            char** newArgs;
-            char** lastArg = lastCommand(args);
             pid_t pid2;
             
-            char*** test = malloc(sizeof(char**) * pipedCommands);
+            char** lastArg = lastCommand(args);
+            char*** newArgs = malloc(sizeof(char**) * pipedCommands);
 
             for (j = 0; j < pipedCommands; j++) {
-                test[j] = deleteSlice(args, findIndex(args, "|"), len(args) - 1);
+                newArgs[j] = deleteSlice(args, findIndex(args, "|"), len(args) - 1);
                 args = deleteSlice(args, 0, findIndex(args, "|"));
             }
 
             for (j = 0; j < pipedCommands; j++) {
-                if (findIndex(test[j], ">") != -1) {
-                    test[j] = deleteSlice(*test, findIndex(test[i], ">"), len(test[j]));
+                if (findIndex(newArgs[j], ">") != -1) {
+                    newArgs[j] = deleteSlice(*newArgs, findIndex(newArgs[i], ">"), len(newArgs[j]));
                 }
             }
 
@@ -255,10 +256,10 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                 exit(1);
             } else if (pid == 0) {
 
-                int inputRedirIdx = findIndex(test[i], "<");
+                int inputRedirIdx = findIndex(newArgs[i], "<");
                 if (inputRedirIdx > -1) {
-                    handleInputRedirection(test[i], inputRedirIdx);
-                    test[0] = deleteSlice(*test, inputRedirIdx, inputRedirIdx + 1);
+                    handleInputRedirection(newArgs[i], inputRedirIdx);
+                    newArgs[0] = deleteSlice(*newArgs, inputRedirIdx, inputRedirIdx + 1);
                 }
 
                   while (i < pipedCommands) {
@@ -272,14 +273,14 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                           close(fd[1]);
 
 
-                          if (findIndex(test[i - 1], ">") == -1) {
-                              if (execvp(*test[i - 1], test[i - 1]) < 0) {
+                          if (findIndex(newArgs[i - 1], ">") == -1) {
+                              if (execvp(*newArgs[i - 1], newArgs[i - 1]) < 0) {
                                   printf("ERROR: execvp() failed\n");
                                   exit(1);
                               }
                           } else {
-                              test[0] = deleteSlice(*test, findIndex(test[i - 1], ">"), len(test[0]));
-                              if (execvp(*test[i - 1], test[i - 1]) < 0) {
+                              newArgs[0] = deleteSlice(*newArgs, findIndex(newArgs[i - 1], ">"), len(newArgs[0]));
+                              if (execvp(*newArgs[i - 1], newArgs[i - 1]) < 0) {
                                   printf("ERROR: execvp() failed\n");
                                   exit(1);
                               }
@@ -297,10 +298,10 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                       }
                   }
 
-                int outputRedirIdx = findIndex(test[i - 1], ">");
+                int outputRedirIdx = findIndex(newArgs[i - 1], ">");
                 if (outputRedirIdx > -1) {
                     handleOutputRedirection(args, outputRedirIdx);
-                    test[0] = deleteSlice(*test, outputRedirIdx, outputRedirIdx + 1);
+                    newArgs[0] = deleteSlice(*newArgs, outputRedirIdx, outputRedirIdx + 1);
                 }
 
                   if (execvp(lastArg[0], lastArg) < 0) {
@@ -313,7 +314,6 @@ void handleCommand(char* args[], int argLen, int doWait, int pipedCommands, int 
                     exit(1);
                 }
 
-                // TODO:
                 if (doWait) { waitpid(pid, &status, 0); }
             }
         }
@@ -326,7 +326,6 @@ void execute(char* args[]) {
 
     int doWait;
     int argLen = len(args);
-    int chDir = strcmp(args[0], "cd"); // O confirms `cd` is the first argument
     int pipeCount = numChar(args, "|");
 
     if (strcmp(args[argLen-1], "&") != 0) {
@@ -336,7 +335,7 @@ void execute(char* args[]) {
         doWait = FALSE; // Background command
     }
 
-    handleCommand(args, argLen, doWait, pipeCount, chDir);
+    handleCommand(args, argLen, doWait, pipeCount);
 }
 
 

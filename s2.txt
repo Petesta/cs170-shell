@@ -1,0 +1,10 @@
+a.out
+expected.txt
+input.txt
+Makefile
+proj1
+README.md
+s2.txt
+shell
+shell.c
+Vagrantfile
